@@ -34,7 +34,7 @@ $ docker run -d --privileged --pid host --net host \
                 -e THERMOSTAT_CMDC_PORT=12000 -e THERMOSTAT_CMDC_ADDR=192.168.0.1 \
                 -e THERMOSTAT_DB_URL=http://example.com/thermostat/storage \
                 --name thermostat1-agent \
-                -v /docker/tmp:/tmp rhscl_beta/thermostat-1-agent-rhel7
+                -v /docker/tmp:/tmp rhscl/thermostat-1-agent-rhel7
 ```
 
 Usage for Running Java Applications being Monitored in Separate Containers
