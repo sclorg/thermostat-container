@@ -1,4 +1,4 @@
-FROM rhel7:7.2-56
+FROM rhel7:7.2
 # Thermostat Agent Image.
 #
 # Volumes:
