@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# The environment variables: MONGO_URL, MONGO_USERNAME, MONGO_PASSWORD,
+# THERMOSTAT_CLIENT_USERNAME, THERMOSTAT_CLIENT_PASSWORD, THERMOSTAT_AGENT_USERNAME
+# and THERMOSTAT_AGENT_PASSWORD  must be specified to run Thermostat Storage
+#
+exit=0
+for var in MONGO_URL MONGO_USERNAME MONGO_PASSWORD THERMOSTAT_CLIENT_USERNAME THERMOSTAT_CLIENT_PASSWORD THERMOSTAT_AGENT_USERNAME THERMOSTAT_AGENT_PASSWORD
+do
+  if [ -z "${!var}" ]; then
+    echo "The ${var} environment variable is required"
+    exit=1
+  fi
+done
+
+if [ "${exit}" -eq "1" ]; then
+  exit 1
+fi
+
+# Setup web storage
+WEB_AUTH=${THERMOSTAT_ROOT}/etc/thermostat/web.auth
+CATALINA_XML=${THERMOSTAT_ROOT}/usr/share/tomcat/conf/server.xml
+
+ROLES_EXAMPLE=${THERMOSTAT_ROOT}/usr/share/doc/thermostat/examples/thermostat-roles-example.properties
+USERS_EXAMPLE=${THERMOSTAT_ROOT}/usr/share/doc/thermostat/examples/thermostat-users-example.properties
+ROLES=${THERMOSTAT_ROOT}/etc/thermostat/thermostat-roles.properties
+USERS=${THERMOSTAT_ROOT}/etc/thermostat/thermostat-users.properties
+
+THERMOSTAT_XML=${THERMOSTAT_ROOT}/usr/share/tomcat/webapps/thermostat/WEB-INF/web.xml
+
+cp ${WEB_AUTH}.orig ${WEB_AUTH}
+echo -en "storage.username=${MONGO_USERNAME}\nstorage.password=${MONGO_PASSWORD}\n" >> ${WEB_AUTH}
+
+sed "s#<Connector port=\"8999\"#<Connector port=\"8080\"#g" ${CATALINA_XML}.orig > ${CATALINA_XML}
+
+sed -e "s#client-tester#${THERMOSTAT_CLIENT_USERNAME}#g" -e "s#agent-tester#${THERMOSTAT_AGENT_USERNAME}#g" ${ROLES_EXAMPLE} > ${ROLES}
+sed  -e "s#client-tester=tester#${THERMOSTAT_CLIENT_USERNAME}=${THERMOSTAT_CLIENT_PASSWORD}#g" -e "s#agent-tester=tester#${THERMOSTAT_AGENT_USERNAME}=${THERMOSTAT_AGENT_PASSWORD}#g" ${USERS_EXAMPLE} > ${USERS}
+
+sed -e "s#mongodb://127.0.0.1:27518#${MONGO_URL}#g" ${THERMOSTAT_XML}.orig > ${THERMOSTAT_XML}
+
+/usr/lib/jvm/jre/bin/java -Djava.security.auth.login.config=/opt/rh/rh-thermostat16/root/etc/thermostat/thermostat_jaas.conf -Djava.security.egd=file:/dev/./urandom -classpath /usr/share/tomcat/bin/bootstrap.jar:/usr/share/tomcat/bin/tomcat-juli.jar:/usr/share/java/commons-daemon.jar -Dcatalina.base=/opt/rh/rh-thermostat16/root/usr/share/tomcat -Dcatalina.home=/usr/share/tomcat -Djava.endorsed.dirs= -Djava.io.tmpdir=/var/cache/tomcat/temp -Djava.util.logging.config.file=/opt/rh/rh-thermostat16/root/usr/share/tomcat/conf/logging.properties -Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager org.apache.catalina.startup.Bootstrap start

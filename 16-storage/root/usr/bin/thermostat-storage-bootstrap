@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Setup web storage
+WEB_AUTH=${THERMOSTAT_ROOT}/etc/thermostat/web.auth
+CATALINA_XML=${THERMOSTAT_ROOT}/usr/share/tomcat/conf/server.xml
+
+ROLES_EXAMPLE=${THERMOSTAT_ROOT}/usr/share/doc/thermostat/examples/thermostat-roles-example.properties
+USERS_EXAMPLE=${THERMOSTAT_ROOT}/usr/share/doc/thermostat/examples/thermostat-users-example.properties
+ROLES=${THERMOSTAT_ROOT}/etc/thermostat/thermostat-roles.properties
+USERS=${THERMOSTAT_ROOT}/etc/thermostat/thermostat-users.properties
+
+THERMOSTAT_XML=${THERMOSTAT_ROOT}/usr/share/tomcat/webapps/thermostat/WEB-INF/web.xml
+
+cp ${ROLES_EXAMPLE} ${ROLES}
+cp ${USERS_EXAMPLE} ${USERS}
+
+cp ${CATALINA_XML} ${CATALINA_XML}.orig
+cp ${THERMOSTAT_XML} ${THERMOSTAT_XML}.orig
+cp ${WEB_AUTH} ${WEB_AUTH}.orig
+
+for file in ${WEB_AUTH} ${WEB_AUTH}.orig ${CATALINA_XML} ${CATALINA_XML}.orig ${ROLES_EXAMPLE} ${USERS_EXAMPLE} ${ROLES} ${USERS} ${THERMOSTAT_XML} ${THERMOSTAT_XML}.orig
+do
+chown tomcat:0 $file
+chmod 660 $file
+done
+
+# Loosen permission bits to avoid problems running container with arbitrary UID
+chown -R tomcat:0 /var/cache/tomcat
+chmod -R g+rw /var/cache/tomcat
