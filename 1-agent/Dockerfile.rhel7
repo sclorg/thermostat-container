@@ -19,11 +19,11 @@ LABEL io.k8s.description="A monitoring and serviceability tool for OpenJDK." \
       io.k8s.display-name="Thermostat Agent 1.4"
 
 # Labels consumed by Red Hat build service
-LABEL BZComponent="thermostat1-agent-docker" \
-      Name="rhscl/thermostat-1-agent-rhel7" \
-      Version="1.4" \ 
-      Release="8" \
-      Architecture="x86_64"
+LABEL com.redhat.component="thermostat1-agent-docker" \
+      name="rhscl/thermostat-1-agent-rhel7" \
+      version="1.4" \
+      release="8" \
+      architecture="x86_64"
 
 ENV THERMOSTAT_CMDC_ADDR 127.0.0.1
 ENV THERMOSTAT_CMDC_PORT 12000

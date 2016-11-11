@@ -25,7 +25,7 @@ LABEL io.k8s.description="A monitoring and serviceability tool for OpenJDK." \
 LABEL com.redhat.component="rh-thermostat16-storage-docker" \
       name="rhscl/thermostat-16-storage-rhel7" \
       version="1.6" \
-      Release="1" \
+      release="1" \
       architecture="x86_64"
 
 ENV THERMOSTAT_HOME=/opt/rh/rh-thermostat16/root/usr/share/thermostat
