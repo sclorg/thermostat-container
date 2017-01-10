@@ -61,6 +61,7 @@ ENV BASH_ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
 RUN mkdir -p /home/tomcat && chown -R tomcat:tomcat /home/tomcat
 
 RUN [ "thermostat-storage-bootstrap" ]
+RUN rm -rf /tmp/hsperfdata_root
 
 # the tomcat uid is generally 91
 USER 91
