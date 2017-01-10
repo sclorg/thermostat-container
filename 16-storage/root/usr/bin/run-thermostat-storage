@@ -1,19 +1,112 @@
 #!/bin/bash
+#
+# Utility functions
+#
+get_client_roles() {
+  grep 'client-tester=' ${ROLES_EXAMPLE} | cut -d'=' -f2
+}
+
+get_agent_roles() {
+  grep 'agent-tester=' ${ROLES_EXAMPLE} | cut -d'=' -f2
+}
+
+add_user_to_roles() {
+  local user=$1
+  local roles=$2
+  echo ${user}="${roles}" >> ${TMP_ROLES}
+}
+
+substitute_user_in_roles() {
+  local user=$1
+  local orig_user=$2
+  sed -i -e "s#${orig_user}#${user}#g" ${TMP_ROLES}
+}
+
+add_user_to_users() {
+  local user=$1
+  local password=$2
+  echo ${user}="${password}" >> ${TMP_USERS}
+}
+
+substitute_user_in_users() {
+  local user=$1
+  local password=$2
+  local orig_user=$3
+  local orig_password=$4
+  sed -i -e "s#${orig_user}=${orig_password}#${user}=${password}#g" ${TMP_USERS}
+}
+
+modify_roles() {
+  local users=$1
+  local roles=$2
+  local orig_user=$3
+  local count=0
+  for user in ${users}; do
+    if [ ${count} -gt 0 ]; then
+      add_user_to_roles "${user}" "${roles}"
+    else
+      substitute_user_in_roles "${user}" "${orig_user}"
+    fi
+    count=$(( ${count} + 1 ))
+  done
+}
+
+modify_users() {
+  local users=$1
+  local passwords=$2
+  local orig_user=$3
+  local orig_pwd=$4
+  declare -a pwds=()
+  declare -a u_names=()
+  local u_count=0
+  local p_count=0
+  for u in ${users}; do
+    u_names[${u_count}]="${u}"
+    u_count=$(( ${u_count} + 1 ))
+  done
+  for p in ${passwords}; do
+    pwds[${p_count}]="${p}"
+    p_count=$(( ${p_count} + 1 ))
+  done
+  if [ ${u_count} -ne ${p_count} ]; then
+    echo 1>&2 "Users and passwords lists don't match in length."
+    exit 1
+  fi
+  for i in $(seq 0 $(( ${u_count} - 1 )) ); do
+    if [ ${i} -eq 0 ]; then
+      substitute_user_in_users "${u_names[${i}]}" "${pwds[${i}]}" "${orig_user}" "${orig_pwd}"
+    else
+      add_user_to_users "${u_names[${i}]}" "${pwds[${i}]}"
+    fi
+  done
+}
 
 # The environment variables: MONGO_URL, MONGO_USERNAME, MONGO_PASSWORD,
-# THERMOSTAT_CLIENT_USERNAME, THERMOSTAT_CLIENT_PASSWORD, THERMOSTAT_AGENT_USERNAME
-# and THERMOSTAT_AGENT_PASSWORD  must be specified to run Thermostat Storage
+# must be specified to run Thermostat Storage
 #
-exit=0
-for var in MONGO_URL MONGO_USERNAME MONGO_PASSWORD THERMOSTAT_CLIENT_USERNAME THERMOSTAT_CLIENT_PASSWORD THERMOSTAT_AGENT_USERNAME THERMOSTAT_AGENT_PASSWORD
-do
+retval=0
+for var in MONGO_URL MONGO_USERNAME MONGO_PASSWORD; do
   if [ -z "${!var}" ]; then
-    echo "The ${var} environment variable is required"
-    exit=1
+    echo 1>&2 "The ${var} environment variable is required"
+    retval=1
+  fi
+done
+# For backward compatibility either one of the following pairs need to be
+# present. The plural forms will be preferred if present.
+#   THERMOSTAT_CLIENT_USERNAME or THERMOSTAT_CLIENT_USERNAMES
+#   THERMOSTAT_CLIENT_PASSWORD or THERMOSTAT_CLIENT_PASSWORDS
+#   THERMOSTAT_AGENT_USERNAME or THERMOSTAT_AGENT_USERNAMES
+#   THERMOSTAT_AGENT_PASSWORD or THERMOSTAT_AGENT_PASSWORDS
+for var in THERMOSTAT_CLIENT_USERNAME THERMOSTAT_CLIENT_PASSWORD THERMOSTAT_AGENT_USERNAME THERMOSTAT_AGENT_PASSWORD; do
+  plural="${var}S"
+  if [ -z "${!var}" ] && [ -z "${!plural}" ]; then
+    echo 1>&2 "One of the following environment variables are required: ${plural} (preferred) or ${var}"
+    retval=1
   fi
 done
 
-if [ "${exit}" -eq "1" ]; then
+
+if [ "${retval}" -eq "1" ]; then
   exit 1
 fi
 
@@ -33,9 +126,38 @@ echo -en "storage.username=${MONGO_USERNAME}\nstorage.password=${MONGO_PASSWORD}
 
 sed "s#<Connector port=\"8999\"#<Connector port=\"8080\"#g" ${CATALINA_XML}.orig > ${CATALINA_XML}
 
-sed -e "s#client-tester#${THERMOSTAT_CLIENT_USERNAME}#g" -e "s#agent-tester#${THERMOSTAT_AGENT_USERNAME}#g" ${ROLES_EXAMPLE} > ${ROLES}
-sed  -e "s#client-tester=tester#${THERMOSTAT_CLIENT_USERNAME}=${THERMOSTAT_CLIENT_PASSWORD}#g" -e "s#agent-tester=tester#${THERMOSTAT_AGENT_USERNAME}=${THERMOSTAT_AGENT_PASSWORD}#g" ${USERS_EXAMPLE} > ${USERS}
-
 sed -e "s#mongodb://127.0.0.1:27518#${MONGO_URL}#g" ${THERMOSTAT_XML}.orig > ${THERMOSTAT_XML}
 
+# Setup for multiple agent/client users
+if [ ! -z ${THERMOSTAT_CLIENT_PASSWORD} ] && [ -z ${THERMOSTAT_CLIENT_PASSWORDS} ]; then
+  THERMOSTAT_CLIENT_PASSWORDS=${THERMOSTAT_CLIENT_PASSWORD}
+fi
+if [ ! -z ${THERMOSTAT_CLIENT_USERNAME} ] && [ -z ${THERMOSTAT_CLIENT_USERNAMES} ]; then
+  THERMOSTAT_CLIENT_USERNAMES=${THERMOSTAT_CLIENT_USERNAME}
+fi
+
+if [ ! -z ${THERMOSTAT_AGENT_USERNAME} ] && [ -z ${THERMOSTAT_AGENT_USERNAMES} ]; then
+  THERMOSTAT_AGENT_USERNAMES=${THERMOSTAT_AGENT_USERNAME}
+fi
+if [ ! -z ${THERMOSTAT_AGENT_PASSWORD} ] && [ -z ${THERMOSTAT_AGENT_PASSWORDS} ]; then
+  THERMOSTAT_AGENT_PASSWORDS=${THERMOSTAT_AGENT_PASSWORD}
+fi
+
+# Prepare thermostat-roles.properties
+TMP_ROLES=$(mktemp)
+cp ${ROLES_EXAMPLE} ${TMP_ROLES}
+modify_roles "${THERMOSTAT_AGENT_USERNAMES}" "$(get_agent_roles)" "agent-tester"
+modify_roles "${THERMOSTAT_CLIENT_USERNAMES}" "$(get_client_roles)" "client-tester"
+cp ${TMP_ROLES} ${ROLES}
+rm -f ${TMP_ROLES}
+
+# Prepare thermostat-users.properties
+TMP_USERS=$(mktemp)
+cp ${USERS_EXAMPLE} ${TMP_USERS}
+modify_users "${THERMOSTAT_AGENT_USERNAMES}" "${THERMOSTAT_AGENT_PASSWORDS}" "agent-tester" "tester"
+modify_users "${THERMOSTAT_CLIENT_USERNAMES}" "${THERMOSTAT_CLIENT_PASSWORDS}" "client-tester" "tester"
+cp ${TMP_USERS} ${USERS}
+rm -f ${TMP_USERS}
+
+# Start the storage endpoint via tomcat
 /usr/lib/jvm/jre/bin/java -Djava.security.auth.login.config=/opt/rh/rh-thermostat16/root/etc/thermostat/thermostat_jaas.conf -Djava.security.egd=file:/dev/./urandom -classpath /usr/share/tomcat/bin/bootstrap.jar:/usr/share/tomcat/bin/tomcat-juli.jar:/usr/share/java/commons-daemon.jar -Dcatalina.base=/opt/rh/rh-thermostat16/root/usr/share/tomcat -Dcatalina.home=/usr/share/tomcat -Djava.endorsed.dirs= -Djava.io.tmpdir=/var/cache/tomcat/temp -Djava.util.logging.config.file=/opt/rh/rh-thermostat16/root/usr/share/tomcat/conf/logging.properties -Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager org.apache.catalina.startup.Bootstrap start
