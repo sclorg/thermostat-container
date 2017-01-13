@@ -250,7 +250,7 @@ info "   Testing thermostat --version ..."
 test_command_in_container "thermostat --version" "Thermostat version 1.6.4" ${cid_file}
 check_result $?
 info "   Testing whoami ..."
-test_command_in_container "whoami" "th-user" ${cid_file}
+test_command_in_container "whoami" "default" ${cid_file}
 check_result $?
 
 cleanup
@@ -266,7 +266,7 @@ wait_for_cid
 info "   Testing thermostat --version ..."
 test_command_in_container "thermostat --version" "Thermostat version 1.6.4" ${cid_file}
 info "   Testing whoami ..."
-test_command_in_container "whoami" "th-user" ${cid_file}
+test_command_in_container "whoami" "default" ${cid_file}
 check_result $?
 
 cleanup

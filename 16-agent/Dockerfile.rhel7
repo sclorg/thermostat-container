@@ -1,4 +1,4 @@
-FROM rhel7
+FROM rhscl/s2i-base-rhel7
 # Thermostat Agent Image.
 #
 # Environment:
@@ -11,9 +11,7 @@ FROM rhel7
 #                                 shall monitor runs as.
 
 ENV THERMOSTAT_VERSION=1.6 \
-    HOME=/root
-    HOME=/home/th-user \
-    APP_USER="th-user"
+    APP_USER="default"
 
 ENV SUMMARY="A monitoring and serviceability tool for OpenJDK."	\
     DESCRIPTION="The powerful, free and open source instrumentation tool for the Hotspot JVM."
@@ -30,18 +28,14 @@ LABEL summary="$SUMMARY" \
 ENV THERMOSTAT_CMDC_PORT 12000
 ENV THERMOSTAT_HOME /opt/rh/rh-thermostat16/root/usr/share/thermostat
 ENV THERMOSTAT_JARS /opt/rh/rh-thermostat16/root/usr/share/java/thermostat
-ENV USER_THERMOSTAT_HOME /home/th-user/thermostat-1.6
+ENV USER_THERMOSTAT_HOME ${HOME}/.thermostat-1.6
 
 EXPOSE ${THERMOSTAT_CMDC_PORT}
 
-RUN useradd -u 10011 -r -g 0 -d /home/th-user -s /sbin/nologin \
-      -c "Default Thermostat Container User" th-user
-
 # Create USER_THERMOSTAT_HOME parent folder, ensure any UID can write to it.
-RUN mkdir -p /home/th-user && \
-    chown -R th-user:0 /home/th-user && \
-    chmod g+x /home && chmod g+wx /home/th-user
-
+RUN chown -R default:0 ${HOME} && \
+    chmod g+x /home && chmod g+wx ${HOME}
+ 
 RUN yum install -y yum-utils && \
     yum-config-manager --enable rhel-server-rhscl-7-rpms && \
     yum-config-manager --enable rhel-7-server-optional-rpms && \
@@ -56,14 +50,14 @@ RUN yum install -y yum-utils && \
 COPY thermostat-user-home-config ${USER_THERMOSTAT_HOME}
 COPY root /
 
-# Ensure any UID can read/write to files in /home/th-user
-RUN chown -R th-user:0 ${HOME} && \
+# Ensure any UID can read/write to files in /opt/app-root
+RUN chown -R default:0 /opt/app-root && \
     find ${HOME} -type d -exec chmod g+rwx '{}' \; && \
     find ${HOME} -type f -exec chmod g+rw '{}' \;
 
 WORKDIR ${HOME}
 
-USER th-user
+USER 1001
 
 # Get prefix path and path to scripts rather than hard-code them in scripts
 ENV CONTAINER_SCRIPTS_PATH=/usr/share/container-scripts/thermostat \

@@ -14,7 +14,7 @@ fi
 # Do this only if we are a random UID (neither root nor a resolvable user)
 if [ "x${USER_ID}" != "x0" -a "x${RESOLVABLE_USER}" == "xfalse" ]; then
 
-    NSS_WRAPPER_PASSWD=/home/th-user/etc/passwd
+    NSS_WRAPPER_PASSWD=/opt/app-root/etc/passwd
     NSS_WRAPPER_GROUP=/etc/group
 
     cat /etc/passwd | sed -e 's/^${UNAME}:/${UNAME}-orig:/' > $NSS_WRAPPER_PASSWD

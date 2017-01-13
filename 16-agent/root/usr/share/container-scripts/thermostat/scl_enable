@@ -2,4 +2,4 @@
 unset BASH_ENV PROMPT_COMMAND ENV
 source scl_source enable ${ENABLED_COLLECTIONS}
 # Make sure random UIDs are recognized as the current user
-source /home/th-user/etc/generate_container_user ${APP_USER}
+source /opt/app-root/etc/generate_container_user ${APP_USER}
