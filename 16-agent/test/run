@@ -40,6 +40,7 @@ TH_AGENT_USER="a"
 TH_AGENT_PWD="a-pwd"
 TH_CLIENT_USER="c"
 TH_CLIENT_PWD="c-pwd"
+TH_BASED_BUILDER_IMAGE="thermostat/builder-img-wildfly"
 
 MONGO_CID_FILE="$(mktemp -u --suffix=.cid)"
 TH_STORAGE_CID_FILE="$(mktemp -u --suffix=.cid)"
@@ -131,8 +132,12 @@ run_storage() {
   run_th_storage_image
 }
 
+get_env_for_thermostat() {
+  echo "-e THERMOSTAT_AGENT_USERNAME=${TH_AGENT_USER} -e THERMOSTAT_AGENT_PASSWORD=${TH_AGENT_PWD} -e THERMOSTAT_DB_URL=${TH_DB_URL}"
+}
+
 run_image() {
-  local image_env_vars="-e THERMOSTAT_AGENT_USERNAME=${TH_AGENT_USER} -e THERMOSTAT_AGENT_PASSWORD=${TH_AGENT_PWD} -e THERMOSTAT_DB_URL=${TH_DB_URL}"
+  local image_env_vars=$(get_env_for_thermostat)
   docker run ${CONTAINER_ARGS} -d --cidfile=${cid_file} ${image_env_vars} -p ${cmd_chan_host_port}:${cmd_chan_port} ${IMAGE_NAME}
 }
 
@@ -231,6 +236,67 @@ test_required_env() {
   fi
 }
 
+build_builder_img() {
+  # Build a custom builder image, based on the agent image
+  pushd ${test_dir}/wildfly-builder-image-th-agent > /dev/null
+  docker build -t "${TH_BASED_BUILDER_IMAGE}" .
+  check_result $?
+  popd
+}
+
+run_s2i_build() {
+  s2i build file://${test_dir}/wildfly-testapp ${TH_BASED_BUILDER_IMAGE} ${TH_BASED_BUILDER_IMAGE}-testapp
+}
+
+test_connection() {
+  local ip=$1
+  local max_attempts=60
+  local sleep_time=1
+  local attempt=1
+  local result=1
+  # It might take a fairly long time for the app to become available. Upper
+  # bound 1 minute.
+  while [ $attempt -le $max_attempts ]; do
+    echo "Sending GET request to http://${ip}:8080/"
+    response_code=$(curl -s -w %{http_code} -o /dev/null http://${ip}:8080/)
+    status=$?
+    if [ $status -eq 0 ]; then
+      if [ $response_code -eq 200 ]; then
+        result=0
+      fi
+      break
+    fi
+    attempt=$(( $attempt + 1 ))
+    sleep $sleep_time
+  done
+  return $result
+}
+
+test_agent_runs() {
+  local run_cmd="ps ax | grep 'thermostat agent'"
+  local out=$(docker exec $(cat ${cid_file}) /bin/bash -c "${run_cmd}" 2>&1)
+  if ! echo "${out}" | grep -q "${TH_DB_URL}"; then
+    echo 1>&2 "FAILURE: Thermostat agent is not running and/or connected to ${TH_DB_URL}"
+    echo 1>&2 "         output was: ${out}"
+    return 1
+  fi 
+  return 0
+}
+
+test_built_image() {
+  local image_env_vars=$(get_env_for_thermostat)
+  # run test app with the agent process
+  docker run -u 123456 -d --cidfile=${cid_file} \
+         ${image_env_vars} \
+         ${TH_BASED_BUILDER_IMAGE}-testapp > /dev/null
+  wait_for_cid
+  local ip=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' $(cat ${cid_file}))
+  test_connection ${ip}
+  check_result $?
+  test_agent_runs
+  check_result $?
+}
+
 prepare
 
 for i in THERMOSTAT_AGENT_USERNAME THERMOSTAT_AGENT_PASSWORD THERMOSTAT_DB_URL; do
@@ -258,6 +324,7 @@ rm ${cid_file}
 
 cid_file=$(mktemp -u --suffix=.cid)
 
+run_storage
 # Same basic sanity test where container runs with random UID.
 CONTAINER_ARGS="-u 12345"
 info "Running image sanity test with custom UID."
@@ -268,6 +335,15 @@ test_command_in_container "thermostat --version" "Thermostat version 1.6.4" ${ci
 info "   Testing whoami ..."
 test_command_in_container "whoami" "default" ${cid_file}
 check_result $?
+
+cleanup
+rm ${cid_file}
+
+build_builder_img
+run_s2i_build
+run_storage
+cid_file=$(mktemp -u --suffix=.cid)
+test_built_image
 
 cleanup
 rm ${cid_file}
