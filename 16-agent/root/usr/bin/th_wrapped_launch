@@ -1,0 +1,10 @@
+#!/bin/bash
+#
+# Launches the extended images boot program and,
+# if required environment variables are set, the
+# Thermostat agent.
+launch_script="$1"
+
+. optionally_launch_thermostat_agent
+
+exec "${launch_script}"
