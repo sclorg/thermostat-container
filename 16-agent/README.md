@@ -2,7 +2,7 @@ Thermostat Agent Docker image
 =============================
 
 This repository contains Dockerfiles for a Thermostat Agent base image which can be used
-for Java application images or builder images to be based on. By basing your image on the
+for Java application images or builder images to be based on it. By basing your image on the
 `rhscl/thermostat-16-agent-rhel7` image, a Thermostat agent can get enabled on demand in
 order to monitor your Java app.
 
@@ -23,4 +23,6 @@ initialization by passing `-e VAR=VALUE` to the Docker run command.
 Usage
 ---------------------------------
 
-TODO (write a tutorial what is needed for Dockerfiles to consume the image)
+See https://github.com/jerboaa/thermostat-agent-container-ex
+
+<!-- TODO -->
