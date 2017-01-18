@@ -313,7 +313,7 @@ info "Running image sanity test with default config."
 run_image
 wait_for_cid
 info "   Testing thermostat --version ..."
-test_command_in_container "thermostat --version" "Thermostat version 1.6.4" ${cid_file}
+test_command_in_container "thermostat --version" "Thermostat version 1.6.6" ${cid_file}
 check_result $?
 info "   Testing whoami ..."
 test_command_in_container "whoami" "default" ${cid_file}
@@ -331,7 +331,7 @@ info "Running image sanity test with custom UID."
 run_image
 wait_for_cid
 info "   Testing thermostat --version ..."
-test_command_in_container "thermostat --version" "Thermostat version 1.6.4" ${cid_file}
+test_command_in_container "thermostat --version" "Thermostat version 1.6.6" ${cid_file}
 info "   Testing whoami ..."
 test_command_in_container "whoami" "default" ${cid_file}
 check_result $?
