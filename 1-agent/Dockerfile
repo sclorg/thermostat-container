@@ -31,7 +31,7 @@ RUN yum install -y centos-release-scl-rh && \
     yum erase -y java-1.8.0-openjdk-headless && \
     yum clean all
 COPY thermostat-user-home-config ${USER_THERMOSTAT_HOME}
-ADD root /
+COPY root /
 
 # Get prefix path and path to scripts rather than hard-code them in scripts
 ENV CONTAINER_SCRIPTS_PATH=/usr/share/container-scripts/thermostat \

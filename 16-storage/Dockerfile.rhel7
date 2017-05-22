@@ -41,7 +41,7 @@ RUN yum install -y yum-utils && \
     yum clean all
     
 COPY thermostat-user-home-config ${THERMOSTAT_ROOT}
-ADD root /
+COPY root /
 
 # Get prefix path and path to scripts rather than hard-code them in scripts
 ENV CONTAINER_SCRIPTS_PATH=/usr/share/container-scripts/thermostat \
