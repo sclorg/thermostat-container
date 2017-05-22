@@ -27,9 +27,12 @@ ENV USER_THERMOSTAT_HOME /root/.thermostat
 EXPOSE $THERMOSTAT_CMDC_PORT
 
 RUN yum install -y centos-release-scl-rh && \
-    yum install -y --setopt=tsflags=nodocs thermostat1 && \
+    INSTALL_PKGS="thermostat1 && \
+    yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
+    rpm -V $INSTALL_PKGS && \
     yum erase -y java-1.8.0-openjdk-headless && \
     yum clean all
+
 COPY thermostat-user-home-config ${USER_THERMOSTAT_HOME}
 COPY root /
 
