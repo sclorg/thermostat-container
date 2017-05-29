@@ -15,8 +15,17 @@ FROM centos:centos7
 ENV THERMOSTAT_VERSION=1.4 \
     HOME=/root
 
-LABEL io.k8s.description="A monitoring and serviceability tool for OpenJDK." \
-      io.k8s.display-name="Thermostat Agent 1.4"
+ENV SUMMARY="A monitoring and serviceability tool for OpenJDK."	\
+    DESCRIPTION="The powerful, free and open source instrumentation tool for the Hotspot JVM."
+
+LABEL summary="$SUMMARY" \
+      description="$DESCRIPTION" \
+      io.k8s.description="$SUMMARY" \
+      io.k8s.display-name="Thermostat Agent 1.4" \
+      com.redhat.component="thermostat1-agent-docker" \
+      name="centos/thermostat-1-agent-centos7" \
+      version="1.4" \
+      release="1"
 
 ENV THERMOSTAT_CMDC_ADDR 127.0.0.1
 ENV THERMOSTAT_CMDC_PORT 12000
@@ -27,11 +36,14 @@ ENV USER_THERMOSTAT_HOME /root/.thermostat
 EXPOSE $THERMOSTAT_CMDC_PORT
 
 RUN yum install -y centos-release-scl-rh && \
-    yum install -y --setopt=tsflags=nodocs thermostat1 && \
+    INSTALL_PKGS="thermostat1" && \
+    yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
+    rpm -V $INSTALL_PKGS && \
     yum erase -y java-1.8.0-openjdk-headless && \
     yum clean all
+
 COPY thermostat-user-home-config ${USER_THERMOSTAT_HOME}
-ADD root /
+COPY root /
 
 # Get prefix path and path to scripts rather than hard-code them in scripts
 ENV CONTAINER_SCRIPTS_PATH=/usr/share/container-scripts/thermostat \
