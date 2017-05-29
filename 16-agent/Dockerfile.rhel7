@@ -15,15 +15,17 @@ FROM rhel7
 ENV THERMOSTAT_VERSION=1.6 \
     HOME=/root
 
-LABEL io.k8s.description="A monitoring and serviceability tool for OpenJDK." \
-      io.k8s.display-name="Thermostat Agent 1.6"
+ENV SUMMARY="A monitoring and serviceability tool for OpenJDK."	\
+    DESCRIPTION="The powerful, free and open source instrumentation tool for the Hotspot JVM."
 
-# Labels consumed by Red Hat build service
-LABEL com.redhat.component="rh-thermostat16-agent-docker" \
+LABEL summary="$SUMMARY" \
+      description="$DESCRIPTION" \
+      io.k8s.description="$SUMMARY" \
+      io.k8s.display-name="Thermostat Agent 1.6" \
+      com.redhat.component="rh-thermostat16-agent-docker" \
       name="rhscl/thermostat-16-agent-rhel7" \
       version="1.6" \
-      release="1" \
-      architecture="x86_64"
+      release="1"
 
 ENV THERMOSTAT_CMDC_ADDR 127.0.0.1
 ENV THERMOSTAT_CMDC_PORT 12000
