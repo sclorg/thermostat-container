@@ -41,7 +41,6 @@ RUN yum install -y yum-utils && \
     INSTALL_PKGS="rh-thermostat16" && \
     yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
     rpm -V $INSTALL_PKGS && \
-    yum erase -y java-1.8.0-openjdk-headless && \
     yum clean all
     
 COPY thermostat-user-home-config ${THERMOSTAT_ROOT}
