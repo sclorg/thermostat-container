@@ -1,0 +1,70 @@
+FROM centos:centos7
+# Thermostat Storage Image.
+#
+# Environment:
+#  * $THERMOSTAT_AGENT_USERNAME  - User name for thermostat agents to use
+#                                  for connecting to storage.
+#  * $THERMOSTAT_AGENT_PASSWORD  - Password for thermostat agents to use
+#                                  for connecting to storage.
+#  * $THERMOSTAT_CLIENT_USERNAME - User name for thermostat clients to
+#                                  use for connecting to storage
+#  * $THERMOSTAT_CLIENT_PASSWORD - PASSWORD for thermostat clients to
+#                                  use for connecting to storage
+#  * $THERMOSTAT_DB_PORT         - The port to listen on
+#  * $MONGO_USERNAME             - User name to connect to the mongodb backend
+#  * $MONGO_PASSWORD             - Password to connect to the mongodb backend
+#  * $MONGO_URL                  - The mongodb url to connect to
+
+ENV THERMOSTAT_VERSION=1.6 \
+    HOME=/home/tomcat
+
+ENV SUMMARY="A monitoring and serviceability tool for OpenJDK."	\
+    DESCRIPTION="The powerful, free and open source instrumentation tool for the Hotspot JVM."
+
+LABEL summary="$SUMMARY" \
+      description="$DESCRIPTION" \
+      io.k8s.description="$SUMMARY" \
+      io.k8s.display-name="Thermostat Storage 1.6" \
+      com.redhat.component="rh-thermostat16-storage-docker" \
+      name="centos/thermostat-16-storage-centos7" \
+      version="1.6" \
+      release="1"
+
+ENV THERMOSTAT_HOME=/opt/rh/rh-thermostat16/root/usr/share/thermostat
+ENV THERMOSTAT_ROOT=/opt/rh/rh-thermostat16/root
+
+EXPOSE 8080
+
+RUN yum install -y yum-utils && \
+    INSTALL_PKGS="rh-thermostat16" && \
+    yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
+    rpm -V $INSTALL_PKGS && \
+    yum erase -y java-1.8.0-openjdk-headless && \
+    yum clean all
+    
+COPY thermostat-user-home-config ${THERMOSTAT_ROOT}
+COPY root /
+
+# Get prefix path and path to scripts rather than hard-code them in scripts
+ENV CONTAINER_SCRIPTS_PATH=/usr/share/container-scripts/thermostat \
+    ENABLED_COLLECTIONS=rh-thermostat16
+
+# When bash is started non-interactively, to run a shell script, for example it
+# looks for this variable and source the content of this file. This will enable
+# the SCL for all scripts without need to do 'scl enable'.
+ENV BASH_ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
+    ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
+    PROMPT_COMMAND=". ${CONTAINER_SCRIPTS_PATH}/scl_enable"
+
+RUN mkdir -p /home/tomcat && chown -R tomcat:tomcat /home/tomcat
+
+RUN [ "thermostat-storage-bootstrap" ]
+
+# the tomcat uid is generally 91
+USER 91
+
+WORKDIR /home/tomcat
+
+ENTRYPOINT ["container-entrypoint"]
+
+CMD [ "run-thermostat-storage" ]
