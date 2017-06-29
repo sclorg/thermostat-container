@@ -35,7 +35,8 @@ ENV THERMOSTAT_ROOT=/opt/rh/rh-thermostat16/root
 
 EXPOSE 8080
 
-RUN yum install -y yum-utils && \
+RUN yum install -y yum-utils centos-release-scl-rh && \
+    yum-config-manager --enable centos-sclo-rh-testing && \
     INSTALL_PKGS="rh-thermostat16" && \
     yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
     rpm -V $INSTALL_PKGS && \
