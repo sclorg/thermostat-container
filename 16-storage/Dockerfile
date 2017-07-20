@@ -40,7 +40,6 @@ RUN yum install -y yum-utils centos-release-scl-rh && \
     INSTALL_PKGS="rh-thermostat16" && \
     yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
     rpm -V $INSTALL_PKGS && \
-    yum erase -y java-1.8.0-openjdk-headless && \
     yum clean all
     
 COPY thermostat-user-home-config ${THERMOSTAT_ROOT}
@@ -60,6 +59,7 @@ ENV BASH_ENV=${CONTAINER_SCRIPTS_PATH}/scl_enable \
 RUN mkdir -p /home/tomcat && chown -R tomcat:tomcat /home/tomcat
 
 RUN [ "thermostat-storage-bootstrap" ]
+RUN rm -rf /tmp/hsperfdata_root
 
 # the tomcat uid is generally 91
 USER 91
