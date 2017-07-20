@@ -21,7 +21,7 @@ if [ "$DEBUG" != "" ]; then
 fi
 
 IMAGE_NAME=${IMAGE_NAME:-centos/thermostat-16-storage-centos7}
-MONGODB_IMAGE=${MONGODB_IMAGE:-rhscl/mongodb-32-rhel7}
+MONGODB_IMAGE=${MONGODB_IMAGE:-centos/mongodb-32-centos7}
 
 MONGO_USER=mongo
 MONGO_PWD=mongo
