@@ -18,7 +18,7 @@ ENV SUMMARY="A monitoring and serviceability tool for OpenJDK."	\
 
 LABEL summary="$SUMMARY" \
       description="$DESCRIPTION" \
-      io.k8s.description="$SUMMARY" \
+      io.k8s.description="$DESCRIPTION" \
       io.k8s.display-name="Thermostat Agent 1.6" \
       com.redhat.component="rh-thermostat16-agent-docker" \
       name="rhscl/thermostat-16-agent-rhel7" \
