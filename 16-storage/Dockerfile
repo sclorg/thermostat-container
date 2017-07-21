@@ -23,7 +23,7 @@ ENV SUMMARY="A monitoring and serviceability tool for OpenJDK."	\
 
 LABEL summary="$SUMMARY" \
       description="$DESCRIPTION" \
-      io.k8s.description="$SUMMARY" \
+      io.k8s.description="$DESCRIPTION" \
       io.k8s.display-name="Thermostat Storage 1.6" \
       com.redhat.component="rh-thermostat16-storage-docker" \
       name="centos/thermostat-16-storage-centos7" \
