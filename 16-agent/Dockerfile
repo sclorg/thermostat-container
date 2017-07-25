@@ -38,7 +38,7 @@ RUN chown -R default:0 /opt/app-root && \
 
 RUN yum install -y yum-utils centos-release-scl-rh && \
     yum-config-manager --enable centos-sclo-rh-testing && \
-    INSTALL_PKGS="rh-thermostat16" && \
+    INSTALL_PKGS="rh-thermostat16 nss_wrapper" && \
     yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
     rpm -V $INSTALL_PKGS && \
     yum clean all
