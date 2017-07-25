@@ -32,7 +32,7 @@ fi
 
 IMAGE_NAME=${IMAGE_NAME:-centos/thermostat-16-agent-centos7}
 MONGODB_IMAGE=${MONGODB_IMAGE:-$(echo $IMAGE_NAME | sed -e "s|thermostat-16-agent|mongodb-32|" -e "s|-candidate||")}
-TH_STORAGE_IMAGE=${TH_STORAGE_IMAGE:-$(echo $IMAGE_NAME | sed -e "s|agent|storage|" -e "s|-candidate||")}
+TH_STORAGE_IMAGE=${TH_STORAGE_IMAGE:-$(echo $IMAGE_NAME | sed -e "s|agent|storage|")}
 
 MONGO_USER="mongo"
 MONGO_PWD="mongo"
