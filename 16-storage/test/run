@@ -6,6 +6,10 @@
 # IMAGE_NAME specifies a name of the candidate image used for testing.
 # The image has to be available before this script is executed.
 #
+# MONGODB_IMAGE specifies the name of the mongodb image to use for
+# backing storage. Should be one of rhscl/mongodb-32-rhel7 or
+# centos/mongodb-32-centos7
+#
 # DEBUG environment variable, if not empty, makes 'run' to log every step
 # of testing.
 #
@@ -17,6 +21,209 @@ if [ "$DEBUG" != "" ]; then
 fi
 
 IMAGE_NAME=${IMAGE_NAME:-centos/thermostat-16-storage-centos7}
+MONGODB_IMAGE=${MONGODB_IMAGE:-$(echo $IMAGE_NAME | sed -e "s|thermostat-16-storage|mongodb-32|" -e "s|-candidate||")}
 
-echo "Test not implemented so far."
+MONGO_USER=mongo
+MONGO_PWD=mongo
+MONGO_CID_FILE="$(mktemp -u --suffix=.cid)"
+TH_STORAGE_CID_FILE="$(mktemp -u --suffix=.cid)"
 
+HTTP_METHOD_NOT_ALLOWED=405
+HTTP_UNAUTHORIZED=401
+
+image_exists() {
+  docker inspect $1 &>/dev/null
+}
+
+prepare() {
+  if ! image_exists ${IMAGE_NAME}; then
+    echo 1>&2 "ERROR: The image ${IMAGE_NAME} must exist before this script is executed."
+    exit 1
+  fi
+}
+
+info() {
+  echo -e "\n\e[1m[INFO] $@\e[0m\n"
+}
+
+run_mongodb_container() {
+  # Setup mongodb container
+  docker pull ${MONGODB_IMAGE} > /dev/null
+  docker run ${CONTAINER_ARGS} -d --cidfile=${MONGO_CID_FILE} \
+              -e MONGODB_USER=${MONGO_USER} \
+              -e MONGODB_PASSWORD=${MONGO_PWD} \
+              -e MONGODB_DATABASE=thermostat \
+              -e MONGODB_ADMIN_PASSWORD=arst \
+              ${MONGODB_IMAGE} > /dev/null
+  check_result $?
+
+  MONGO_IP=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' $(cat ${MONGO_CID_FILE}))
+}
+
+cleanup_mongodb_container() {
+  docker stop $(cat ${MONGO_CID_FILE}) > /dev/null 2>&1
+  docker rm $(cat ${MONGO_CID_FILE}) > /dev/null 2>&1
+}
+
+run_thermostat_storage() {
+  local agent_users=$1
+  local agent_pwds=$2
+  local client_users=$3
+  local client_pwds=$4
+
+  # Setup Thermostat Storage container
+  docker run ${CONTAINER_ARGS} -d --cidfile=${TH_STORAGE_CID_FILE} \
+              -e MONGO_URL=mongodb://${MONGO_IP}:27017 \
+              -e MONGO_USERNAME=${MONGO_USER} \
+              -e MONGO_PASSWORD=${MONGO_PWD} \
+              -e THERMOSTAT_AGENT_USERNAMES="${agent_users}" \
+              -e THERMOSTAT_AGENT_PASSWORDS="${agent_pwds}" \
+              -e THERMOSTAT_CLIENT_USERNAMES="${client_users}" \
+              -e THERMOSTAT_CLIENT_PASSWORDS="${client_pwds}" \
+              ${IMAGE_NAME} > /dev/null
+  check_result $?
+
+  TH_STORAGE_IP=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' $(cat ${TH_STORAGE_CID_FILE}))
+  wait_to_become_ready
+}
+
+wait_to_become_ready() {
+  info "Waiting for thermostat storage to become ready ..."
+  local total_wait=30
+  local url="http://${TH_STORAGE_IP}:8080/thermostat/storage"
+  while [ ${total_wait} -gt 0 ]; do
+    local code=$(curl -s -w '%{http_code}' -o /dev/null "${url}" 2> /dev/null)
+    if [ ${code} -eq ${HTTP_UNAUTHORIZED} ]; then
+      break
+    fi
+    total_wait=$(( ${total_wait} - 1 ))
+    sleep 1
+  done
+  if [ ${total_wait} -eq 0 ]; then
+    info "ERROR: Thermostat storage is not becoming available after 30 seconds. Timed out."
+    cleanup
+    exit 1
+  fi
+  info "... Thermostat storage is ready now."
+}
+
+run_thermostat_storage_legacy() {
+  local agent_user=$1
+  local agent_pwd=$2
+  local client_user=$3
+  local client_pwd=$4
+
+  # Setup Thermostat Storage container
+  docker run -d --cidfile=${TH_STORAGE_CID_FILE} \
+              -e MONGO_URL=mongodb://${MONGO_IP}:27017 \
+              -e MONGO_USERNAME=${MONGO_USER} \
+              -e MONGO_PASSWORD=${MONGO_PWD} \
+              -e THERMOSTAT_AGENT_USERNAME=${agent_user} \
+              -e THERMOSTAT_AGENT_PASSWORD=${agent_pwd} \
+              -e THERMOSTAT_CLIENT_USERNAME=${client_user} \
+              -e THERMOSTAT_CLIENT_PASSWORD=${client_pwd} \
+              ${IMAGE_NAME} > /dev/null
+  check_result $?
+
+  TH_STORAGE_IP=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' $(cat ${TH_STORAGE_CID_FILE}))
+  wait_to_become_ready
+}
+
+cleanup_thermostat_storage() {
+  docker stop $(cat ${TH_STORAGE_CID_FILE}) > /dev/null 2>&1
+  docker rm $(cat ${TH_STORAGE_CID_FILE}) > /dev/null 2>&1
+}
+
+cleanup() {
+  info "Cleaning up containers..."
+  cleanup_thermostat_storage
+  cleanup_mongodb_container
+  rm -f ${TH_STORAGE_CID_FILE}
+  rm -f ${MONGO_CID_FILE}
+}
+
+check_result() {
+  local result="$1"
+  if [[ "$result" != "0" ]]; then
+    info "TEST FAILED (${result})"
+    cleanup
+    exit $result
+  fi
+}
+
+assert_http_code() {
+  local expected=$1
+  local username=$2
+  local password=$3
+
+  url="http://${TH_STORAGE_IP}:8080/thermostat/storage"
+  actual=$(curl -s --user "${username}:${password}" -w '%{http_code}' -o /dev/null "${url}")
+  if [ ${expected} -eq ${actual} ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+test_legacy() {
+  local agent_user=agent
+  local agent_pwd=agent-pwd
+  local client_user=client
+  local client_pwd=client-pwd
+
+  run_mongodb_container
+  run_thermostat_storage_legacy "${agent_user}" "${agent_pwd}" "${client_user}" "${client_pwd}"
+
+  assert_http_code ${HTTP_METHOD_NOT_ALLOWED} "${agent_user}" "${agent_pwd}"
+  check_result $?
+  assert_http_code ${HTTP_METHOD_NOT_ALLOWED} "${client_user}" "${client_pwd}"
+  check_result $?
+  assert_http_code ${HTTP_UNAUTHORIZED} "unknown" "unknown_pwd"
+  check_result $?
+}
+
+test_multi_users() {
+  local agent_users="a1 a2 a3-foo"
+  local agent_pwds="a1_pwd a2_pwd a3-foo-pwd"
+  local client_users="client1 client2 client3"
+  local client_pwds="c_pwd1 c_pwd2 c_pwd3"
+
+  run_mongodb_container
+  run_thermostat_storage "${agent_users}" "${agent_pwds}" "${client_users}" "${client_pwds}"
+  declare -a all_users=( ${agent_users} ${client_users} )
+  declare -a all_pwds=( ${agent_pwds} ${client_pwds} )
+  # all defined users should work
+  for i in $(seq 0 $(( ${#all_users[@]} - 1 )) ); do
+    assert_http_code ${HTTP_METHOD_NOT_ALLOWED} "${all_users[${i}]}" "${all_pwds[${i}]}"
+    check_result $?
+  done
+  # an unknown user must not be allowed to access it
+  assert_http_code ${HTTP_UNAUTHORIZED} "unknown" "unknown_pwd"
+  check_result $?
+}
+
+test_random_uid() {
+  CONTAINER_ARGS="-u 123456"
+  test_multi_users
+  unset CONTAINER_ARGS
+}
+
+
+prepare
+info "Testing ${IMAGE_NAME} with legacy env vars (single agent/client user) ..."
+test_legacy
+info "Legacy testing PASSED."
+
+cleanup
+info "Testing ${IMAGE_NAME} with multiple agent/client users..."
+test_multi_users
+info "Multiple agent/client user testing PASSED."
+
+cleanup
+info "Testing ${IMAGE_NAME} with multiple agent/client users and random UID..."
+test_random_uid
+info "Random UID with multiple agent/client users test PASSED."
+
+cleanup
+
+info "All tests PASSED."
