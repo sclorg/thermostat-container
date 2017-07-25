@@ -239,7 +239,8 @@ test_required_env() {
 build_builder_img() {
   # Build a custom builder image, based on the agent image
   pushd ${test_dir}/wildfly-builder-image-th-agent > /dev/null
-  docker build -t "${TH_BASED_BUILDER_IMAGE}" .
+  sed -e "s|__IMAGE_NAME__|${IMAGE_NAME}|g" Dockerfile > Dockerfile.expanded
+  docker build -t "${TH_BASED_BUILDER_IMAGE}" -f Dockerfile.expanded .
   check_result $?
   popd
 }

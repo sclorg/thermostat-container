@@ -6,7 +6,7 @@
 # https://github.com/openshift-s2i/s2i-wildfly folder 10.1
 
 # Only 1.6-12 and up has proper support to be used as base image
-FROM rhscl/thermostat-16-agent-rhel7
+FROM __IMAGE_NAME__
 
 EXPOSE 8080
 
