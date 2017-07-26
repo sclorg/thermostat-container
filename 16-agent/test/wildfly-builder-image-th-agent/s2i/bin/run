@@ -1,0 +1,2 @@
+#!/bin/bash
+exec th_wrapped_launch "${STI_SCRIPTS_PATH}/run-delegate"

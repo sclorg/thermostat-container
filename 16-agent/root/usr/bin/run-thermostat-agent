@@ -2,10 +2,27 @@
 if [ ! -e "${USER_THERMOSTAT_HOME}/etc" ]; then
   mkdir -p "${USER_THERMOSTAT_HOME}/etc"
 fi
+# Require the following environment variables:
+# - THERMOSTAT_AGENT_USERNAME
+# - THERMOSTAT_AGENT_PASSWORD
+# - THERMOSTAT_DB_URL
+if [ "${THERMOSTAT_AGENT_USERNAME}_" == "_" ]; then
+   echo 1>&2 "Required environment variable THERMOSTAT_AGENT_USERNAME not set"
+   exit 1
+fi
+if [ "${THERMOSTAT_AGENT_PASSWORD}_" == "_" ]; then
+   echo 1>&2 "Required environment variable THERMOSTAT_AGENT_PASSWORD not set"
+   exit 1
+fi
+if [ "${THERMOSTAT_DB_URL}_" == "_" ]; then
+   echo 1>&2 "Required environment variable THERMOSTAT_DB_URL not set"
+   exit 1
+fi
+
 # Set the agent connect credentials
 echo -en "username=${THERMOSTAT_AGENT_USERNAME}\npassword=${THERMOSTAT_AGENT_PASSWORD}\n" > "${USER_THERMOSTAT_HOME}/etc/agent.auth"
 chmod 600 "${USER_THERMOSTAT_HOME}/etc/agent.auth"
 # Set up the command channel server to listen on
 # the specified address and port.
-sed "s%CONFIG_LISTEN_ADDRESS=.*%CONFIG_LISTEN_ADDRESS=${THERMOSTAT_CMDC_ADDR}:${THERMOSTAT_CMDC_PORT}%g" ${THERMOSTAT_HOME}/etc/agent.properties > ${USER_THERMOSTAT_HOME}/etc/agent.properties
+sed "s%CONFIG_LISTEN_ADDRESS=.*%CONFIG_LISTEN_ADDRESS=0.0.0.0:${THERMOSTAT_CMDC_PORT}%g" ${THERMOSTAT_HOME}/etc/agent.properties > ${USER_THERMOSTAT_HOME}/etc/agent.properties
 ${THERMOSTAT_HOME}/bin/thermostat agent -d ${THERMOSTAT_DB_URL}

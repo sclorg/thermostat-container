@@ -6,9 +6,23 @@
 # IMAGE_NAME specifies a name of the candidate image used for testing.
 # The image has to be available before this script is executed.
 #
+# MONGODB_IMAGE specifies the name of the mongodb image to use for
+# backing storage. Should be one of rhscl/mongodb-32-rhel7 or
+# centos/mongodb-32-centos7
+#
+# TH_STORAGE_IMAGE specifies the name of the Thermostat storage image
+# which should be used for testing. Should be one of
+# rhscl/thermostat-16-storage-rhel7 or centos/thermostat-16-storage-centos7
+#
 # DEBUG environment variable, if not empty, makes 'run' to log every step
 # of testing.
 #
+# Example usage:
+#   $ IMAGE_NAME=rhscl/thermostat-16-agent-rhel7 \
+#     TH_STORAGE_IMAGE=rhscl/thermostat-16-storage-rhel7 \
+#     MONGODB_IMAGE=rhscl/mongodb-32-rhel7 \
+#     test/run
+# 
 
 THISDIR=$(dirname ${BASH_SOURCE[0]})
 
@@ -17,6 +31,322 @@ if [ "$DEBUG" != "" ]; then
 fi
 
 IMAGE_NAME=${IMAGE_NAME:-centos/thermostat-16-agent-centos7}
+MONGODB_IMAGE=${MONGODB_IMAGE:-$(echo $IMAGE_NAME | sed -e "s|thermostat-16-agent|mongodb-32|" -e "s|-candidate||")}
+TH_STORAGE_IMAGE=${TH_STORAGE_IMAGE:-$(echo $IMAGE_NAME | sed -e "s|agent|storage|")}
 
-echo "Test not implemented so far."
+MONGO_USER="mongo"
+MONGO_PWD="mongo"
+TH_AGENT_USER="a"
+TH_AGENT_PWD="a-pwd"
+TH_CLIENT_USER="c"
+TH_CLIENT_PWD="c-pwd"
+TH_BASED_BUILDER_IMAGE="thermostat/builder-img-wildfly"
 
+MONGO_CID_FILE="$(mktemp -u --suffix=.cid)"
+TH_STORAGE_CID_FILE="$(mktemp -u --suffix=.cid)"
+
+HTTP_UNAUTHORIZED=401
+
+test_dir="$(readlink -zf $(dirname "${BASH_SOURCE[0]}"))"
+image_dir=$(readlink -zf ${test_dir}/..)
+
+cmd_chan_port=12000
+cmd_chan_host_port=12001
+
+info() {
+  echo -e "\n\e[1m[INFO] $@\e[0m\n"
+}
+
+image_exists() {
+  docker inspect $1 &>/dev/null
+}
+
+container_exists() {
+  image_exists $(cat $cid_file)
+}
+
+container_ip() {
+  docker inspect --format="{{ .NetworkSettings.IPAddress }}" $(cat $cid_file)
+}
+
+run_mongodb_image() {
+  docker pull ${MONGODB_IMAGE} > /dev/null
+  docker run -d --cidfile=${MONGO_CID_FILE} \
+              -e MONGODB_USER=${MONGO_USER} \
+              -e MONGODB_PASSWORD=${MONGO_PWD} \
+              -e MONGODB_DATABASE=thermostat \
+              -e MONGODB_ADMIN_PASSWORD=arst \
+              ${MONGODB_IMAGE} > /dev/null
+  check_result $?
+
+  MONGO_IP=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' $(cat ${MONGO_CID_FILE}))
+}
+
+wait_to_become_ready() {
+  local url=$1
+  local total_wait=30
+
+  info "Waiting for thermostat storage to become ready ..."
+  while [ ${total_wait} -gt 0 ]; do
+    local code=$(curl -s -w '%{http_code}' -o /dev/null "${url}" 2> /dev/null)
+    if [ ${code} -eq ${HTTP_UNAUTHORIZED} ]; then
+      break
+    fi
+    total_wait=$(( ${total_wait} - 1 ))
+    sleep 1
+  done
+  if [ ${total_wait} -eq 0 ]; then
+    info "ERROR: Thermostat storage is not becoming available after 30 seconds. Timed out."
+    cleanup
+    exit 1
+  fi
+  info "... Thermostat storage is ready now."
+}
+
+run_th_storage_image() {
+  docker run -d --cidfile=${TH_STORAGE_CID_FILE} \
+              -e MONGO_URL=mongodb://${MONGO_IP}:27017 \
+              -e MONGO_USERNAME=${MONGO_USER} \
+              -e MONGO_PASSWORD=${MONGO_PWD} \
+              -e THERMOSTAT_AGENT_USERNAME=${TH_AGENT_USER} \
+              -e THERMOSTAT_AGENT_PASSWORD=${TH_AGENT_PWD} \
+              -e THERMOSTAT_CLIENT_USERNAME=${TH_CLIENT_USER} \
+              -e THERMOSTAT_CLIENT_PASSWORD=${TH_CLIENT_PWD} \
+              ${TH_STORAGE_IMAGE} > /dev/null
+  check_result $?
+
+  local storage_ip=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' $(cat ${TH_STORAGE_CID_FILE}))
+  TH_DB_URL="http://${storage_ip}:8080/thermostat/storage"
+  wait_to_become_ready "${TH_DB_URL}"
+}
+
+prepare() {
+  if ! image_exists ${IMAGE_NAME}; then
+    echo "ERROR: The image ${IMAGE_NAME} must exist before this script is executed."
+    exit 1
+  fi
+}
+
+run_storage() {
+  run_mongodb_image
+  run_th_storage_image
+}
+
+get_env_for_thermostat() {
+  echo "-e THERMOSTAT_AGENT_USERNAME=${TH_AGENT_USER} -e THERMOSTAT_AGENT_PASSWORD=${TH_AGENT_PWD} -e THERMOSTAT_DB_URL=${TH_DB_URL}"
+}
+
+run_image() {
+  local image_env_vars=$(get_env_for_thermostat)
+  docker run ${CONTAINER_ARGS} -d --cidfile=${cid_file} ${image_env_vars} -p ${cmd_chan_host_port}:${cmd_chan_port} ${IMAGE_NAME}
+}
+
+cleanup_mongodb_container() {
+  docker stop $(cat ${MONGO_CID_FILE}) > /dev/null 2>&1
+  docker rm $(cat ${MONGO_CID_FILE}) > /dev/null 2>&1
+}
+
+cleanup_thermostat_storage() {
+  docker stop $(cat ${TH_STORAGE_CID_FILE}) > /dev/null 2>&1
+  docker rm $(cat ${TH_STORAGE_CID_FILE}) > /dev/null 2>&1
+}
+
+cleanup() {
+  info "Cleaning up containers ..."
+  if [ -f $cid_file ]; then
+    if container_exists; then
+      id=$(docker stop $(cat $cid_file))
+      docker rm ${id}
+    fi
+  fi
+  cleanup_thermostat_storage
+  cleanup_mongodb_container
+  rm -f ${TH_STORAGE_CID_FILE}
+  rm -f ${MONGO_CID_FILE}
+}
+
+check_result() {
+  local result="$1"
+  if [[ "$result" != "0" ]]; then
+    info "TEST FAILED (${result})"
+    cleanup
+    exit $result
+  fi
+}
+
+wait_for_cid() {
+  local max_attempts=10
+  local sleep_time=1
+  local attempt=1
+  local result=1
+  info "Waiting for application container to start $CONTAINER_ARGS ..."
+  while [ $attempt -le $max_attempts ]; do
+    [ -f $cid_file ] && [ -s $cid_file ] && break
+    attempt=$(( $attempt + 1 ))
+    sleep $sleep_time
+  done
+}
+
+test_command_in_container() {
+  local run_cmd="$1"
+  local expected="$2"
+  local cid_file="$3"
+
+  out=$(docker run --rm ${IMAGE_NAME} /bin/bash -c "${run_cmd}" 2>&1)
+  if ! echo "${out}" | grep -q "${expected}"; then
+    echo "ERROR[/bin/bash -c "${run_cmd}"] Expected '${expected}', got '${out}'"
+    return 1
+  fi
+  out=$(docker exec $(cat ${cid_file}) /bin/bash -c "${run_cmd}" 2>&1)
+  if ! echo "${out}" | grep -q "${expected}"; then
+    echo "ERROR[exec /bin/bash -c "${run_cmd}"] Expected '${expected}', got '${out}'"
+    return 1
+  fi
+  out=$(docker exec $(cat ${cid_file}) /bin/sh -ic "${run_cmd}" 2>&1)
+  if ! echo "${out}" | grep -q "${expected}"; then
+    echo "ERROR[exec /bin/sh -ic "${run_cmd}"] Expected '${expected}', got '${out}'"
+    return 1
+  fi
+}
+
+set_env_but_one() {
+  local exclude="$1"
+  local someVal="foo"
+  IMAGE_ENV_VARS=""  
+  for i in THERMOSTAT_AGENT_USERNAME THERMOSTAT_AGENT_PASSWORD THERMOSTAT_DB_URL; do
+    if [ "${exclude}" != "${i}" ]; then
+      IMAGE_ENV_VARS="${IMAGE_ENV_VARS} -e ${i}=${someVal}"
+    fi
+  done
+} 
+
+test_required_env() {
+  local req_env="$1"
+  unset IMAGE_ENV_VARS
+  set_env_but_one ${req_env}
+  info "Testing missing required env variable ${req_env}"
+  out="$(docker run -i --rm ${IMAGE_ENV_VARS} ${IMAGE_NAME} 2>&1)"
+  unset IMAGE_ENV_VARS
+  if ! echo ${out} | grep -q "${req_env}"; then
+    echo "Expected:"
+    echo "   Required environment variable ${req_env} not set"
+    echo "But got:"
+    echo "   ${out}"
+    return 1
+  fi
+}
+
+build_builder_img() {
+  # Build a custom builder image, based on the agent image
+  pushd ${test_dir}/wildfly-builder-image-th-agent > /dev/null
+  sed -e "s|__IMAGE_NAME__|${IMAGE_NAME}|g" Dockerfile > Dockerfile.expanded
+  docker build -t "${TH_BASED_BUILDER_IMAGE}" -f Dockerfile.expanded .
+  check_result $?
+  popd
+}
+
+run_s2i_build() {
+  s2i build file://${test_dir}/wildfly-testapp ${TH_BASED_BUILDER_IMAGE} ${TH_BASED_BUILDER_IMAGE}-testapp
+}
+
+test_connection() {
+  local ip=$1
+  local max_attempts=60
+  local sleep_time=1
+  local attempt=1
+  local result=1
+  # It might take a fairly long time for the app to become available. Upper
+  # bound 1 minute.
+  while [ $attempt -le $max_attempts ]; do
+    echo "Sending GET request to http://${ip}:8080/"
+    response_code=$(curl -s -w %{http_code} -o /dev/null http://${ip}:8080/)
+    status=$?
+    if [ $status -eq 0 ]; then
+      if [ $response_code -eq 200 ]; then
+        result=0
+      fi
+      break
+    fi
+    attempt=$(( $attempt + 1 ))
+    sleep $sleep_time
+  done
+  return $result
+}
+
+test_agent_runs() {
+  local run_cmd="ps ax | grep 'thermostat agent'"
+  local out=$(docker exec $(cat ${cid_file}) /bin/bash -c "${run_cmd}" 2>&1)
+  if ! echo "${out}" | grep -q "${TH_DB_URL}"; then
+    echo 1>&2 "FAILURE: Thermostat agent is not running and/or connected to ${TH_DB_URL}"
+    echo 1>&2 "         output was: ${out}"
+    return 1
+  fi 
+  return 0
+}
+
+test_built_image() {
+  local image_env_vars=$(get_env_for_thermostat)
+  # run test app with the agent process
+  docker run -u 123456 -d --cidfile=${cid_file} \
+         ${image_env_vars} \
+         ${TH_BASED_BUILDER_IMAGE}-testapp > /dev/null
+  wait_for_cid
+  local ip=$(docker inspect --format '{{ .NetworkSettings.IPAddress }}' $(cat ${cid_file}))
+  test_connection ${ip}
+  check_result $?
+  test_agent_runs
+  check_result $?
+}
+
+prepare
+
+for i in THERMOSTAT_AGENT_USERNAME THERMOSTAT_AGENT_PASSWORD THERMOSTAT_DB_URL; do
+  test_required_env ${i}
+  check_result $?
+done
+
+cid_file=$(mktemp -u --suffix=.cid)
+
+run_storage
+# Basic sanity testing. Includes running the container, connected to
+# THERMOSTAT_DB_URL with default config (no random id).
+info "Running image sanity test with default config."
+run_image
+wait_for_cid
+info "   Testing thermostat --version ..."
+test_command_in_container "thermostat --version" "Thermostat version 1.6.6" ${cid_file}
+check_result $?
+info "   Testing whoami ..."
+test_command_in_container "whoami" "default" ${cid_file}
+check_result $?
+
+cleanup
+rm ${cid_file}
+
+cid_file=$(mktemp -u --suffix=.cid)
+
+run_storage
+# Same basic sanity test where container runs with random UID.
+CONTAINER_ARGS="-u 12345"
+info "Running image sanity test with custom UID."
+run_image
+wait_for_cid
+info "   Testing thermostat --version ..."
+test_command_in_container "thermostat --version" "Thermostat version 1.6.6" ${cid_file}
+info "   Testing whoami ..."
+test_command_in_container "whoami" "default" ${cid_file}
+check_result $?
+
+cleanup
+rm ${cid_file}
+
+build_builder_img
+run_s2i_build
+run_storage
+cid_file=$(mktemp -u --suffix=.cid)
+test_built_image
+
+cleanup
+rm ${cid_file}
+
+info "All tests finished successfully."

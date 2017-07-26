@@ -1,8 +1,10 @@
 Thermostat Agent Docker image
 =============================
 
-This repository contains Dockerfiles for a Thermostat Agent running in privileged mode
-so that Java applications in other containers can be monitored.
+This repository contains Dockerfiles for a Thermostat Agent base image which can be used
+for Java application images or builder images to be based on it. By basing your image on the
+`rhscl/thermostat-16-agent-rhel7` image, a Thermostat agent can get enabled on demand in
+order to monitor your Java app.
 
 Environment variables
 ---------------------------------
@@ -14,52 +16,33 @@ initialization by passing `-e VAR=VALUE` to the Docker run command.
 | :---------------------------- | -----------------------------------------   |
 |  `THERMOSTAT_AGENT_USERNAME`  | User name for the Thermostat agent to use connecting to storage |
 |  `THERMOSTAT_AGENT_PASSWORD`  | Password for connecting to storage          |
-|  `THERMOSTAT_CMDC_PORT`       | The port to bind the command channel to     |
-|  `THERMOSTAT_CMDC_ADDR`       | The address to bind the command channel to  |
 |  `THERMOSTAT_DB_URL`          | The URL for Thermostat storage              |
+|  `APP_USER`                   | The application user the Java app Thermostat shall monitor runs as |
 
 
 Usage
 ---------------------------------
 
-For this, we will assume that you are using the `rhscl/thermostat-16-agent-rhel7` image.
-If you want to set only the mandatory environment variables, connect to Thermostat
-storage exposed via `http://example.com/thermostat/storage` and other containers
-running Java apps expose their Hotspot performance data to `/docker/tmp` then execute
-the following command:
+This image is intended to be used as a base image for builder/runtime images in your
+Dockerfile via:
 
-```
-$ docker run -d --privileged --pid host --net host \
-                -e THERMOSTAT_AGENT_USERNAME=user -e THERMOSTAT_AGENT_PASSWORD=password \
-                -e THERMOSTAT_CMDC_PORT=12000 -e THERMOSTAT_CMDC_ADDR=192.168.0.1 \
-                -e THERMOSTAT_DB_URL=http://example.com/thermostat/storage \
-                --name thermostat16-agent \
-                -v /docker/tmp:/tmp rhscl/thermostat-16-agent-rhel7
-```
+    FROM rhscl/thermostat-16-agent-rhel7
 
-Usage for Running Java Applications being Monitored in Separate Containers
---------------------------------------------------------------------------
+For example, a complete drop-in replacement Dockerfile for the `openshift/wildfly-101-centos7`
+image which will have the Thermostat agent pre-installed has been illustrated here:
 
-In order for Java applications to be properly monitored by the super privileged
-Agent Docker image, containers with Java applications need to:
+https://github.com/jerboaa/thermostat-agent-container-ex
 
-1. Expose `/tmp/hsperfdata_*` to host's `/docker/tmp` (via -v `/docker/tmp:/tmp`)
-2. Mount the volume exposed by the Thermostat agent image. This is necessary so
-   that the Thermostat built-in JVM agent for profiling Java apps will be available
-   to the container running the Java application.
-3. Share the host's network stack. This is needed so that JMX connections work
-   cross-container.
-4. Share the host's PID space. This is necessary since `hsperfdata_*` is closely
-   tied to the PIDs being created for Java applications.
+Once the `rhscl/thermostat-16-agent-rhel7` image has been introduced into the image
+hierarchy the Thermostat agent can be started by setting the three required Thermostat
+environment variables. Let's consider image `rhscl/thermostat-test` which uses
+`rhscl/thermostat-16-agent-rhel7` as its base image and runs Java app `foo` on deployment,
+then a Thermostat agent can be started together with `foo` by setting the following
+environment variables:
 
-Given that we want to run a Java application using image `hello-world-webapp` and
-we'd want this application to get monitored by an instance of the  `thermostat16-agent`
-image the application needs to get started using Docker like so:
+    THERMOSTAT_AGENT_USERNAME
+    THERMOSTAT_AGENT_PASSWORD
+    THERMOSTAT_DB_URL
 
-```
-$ docker run -d --pid host \
-                --net host \
-                --volumes-from=thermostat16-agent \
-                --name hello-world \
-                -v /docker/tmp:/tmp hello-world-webapp
-```
+Image `rhscl/thermostat-16-storage-rhel7` can be used to set up a storage endpoint for the
+agent to connect to.

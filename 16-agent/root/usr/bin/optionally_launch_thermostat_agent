@@ -1,0 +1,69 @@
+#!/bin/bash
+#
+# Optionally, launches the Thermostat agent
+# connecting to a pre-configured configured storage.
+# See the thermostat storage template doc for creating
+# such a storage endpoint:
+# https://github.com/jerboaa/thermostat-openshift
+
+has_required_env=true
+for req_var in THERMOSTAT_AGENT_USERNAME THERMOSTAT_AGENT_PASSWORD THERMOSTAT_DB_URL; do
+  if [ -z "${!req_var}" ]; then
+    has_required_env=false
+  fi
+done
+
+if [ -z ${USER_THERMOSTAT_HOME} ]; then
+  echo 1>&2 "${0}: USER_THERMOSTAT_HOME not set."
+  return 1
+elif [ ! -e "${USER_THERMOSTAT_HOME}/logs" ]; then
+  mkdir "${USER_THERMOSTAT_HOME}/logs"
+  if [ $? -ne 0 ]; then
+    echo 1>&2 "${0}: Could not create directory: ${USER_THERMOSTAT_HOME}/logs"
+    return 1
+  fi
+fi
+
+launch_agent() {
+  # Work-around MonitorException bug on early startup. See:
+  # http://icedtea.classpath.org/bugzilla/show_bug.cgi?id=3237
+  # Check jps output for 'main class information unavailable' and
+  # if so delay agent start-up until that changes. Upper bound on
+  # the delay: 100 seconds
+  for i in $(seq 50); do
+    jps_info_for_pid="$(jps 2> /dev/null | egrep '^1[[:space:]]' | sed 's/ -- /_/g' | cut -d_ -f2)"
+    if [ "${jps_info_for_pid}" != "main class information unavailable" ]; then
+      echo "Ready to start Thermostat agent"
+      break
+    else
+      echo "Waiting for Main class info of PID 1 to become available."
+      sleep 2
+    fi
+  done
+  # Finally, launch the agent
+  run-thermostat-agent
+}
+
+log_file="$USER_THERMOSTAT_HOME/logs/agent.log"
+
+if ${has_required_env}; then
+  cat > ${log_file} <<EOL
+Launching the Thermostat agent with the following connection
+settings:
+   THERMOSTAT_AGENT_USERNAME=${THERMOSTAT_AGENT_USERNAME}
+   THERMOSTAT_AGENT_PASSWORD=${THERMOSTAT_AGENT_PASSWORD}
+   THERMOSTAT_DB_URL=${THERMOSTAT_DB_URL}
+EOL
+   # Launch the agent
+   launch_agent >> ${log_file} 2>&1 &
+else
+  cat > ${log_file} <<EOL
+Thermostat agent process not started.
+One or more of the required environment variables
+not set. Environment was:
+   THERMOSTAT_AGENT_USERNAME=${THERMOSTAT_AGENT_USERNAME}
+   THERMOSTAT_AGENT_PASSWORD=${THERMOSTAT_AGENT_PASSWORD}
+   THERMOSTAT_DB_URL=${THERMOSTAT_DB_URL}
+EOL
+fi
+return 0

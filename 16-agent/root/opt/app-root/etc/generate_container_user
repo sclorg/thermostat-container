@@ -1,0 +1,29 @@
+# Set current user in nss_wrapper. The username to which
+# nss_wrapper shall resolve the user to should be passed
+# in as a parameter.
+UNAME=$1
+USER_ID=$(id -u)
+GROUP_ID=$(id -g)
+
+# Check whether we are a resolvable user already
+RESOLVABLE_USER=true
+if ! id -u -n > /dev/null 2>&1; then
+  RESOLVABLE_USER=false
+fi
+
+# Do this only if we are a random UID (neither root nor a resolvable user)
+if [ "x${USER_ID}" != "x0" -a "x${RESOLVABLE_USER}" == "xfalse" ]; then
+
+    NSS_WRAPPER_PASSWD=/opt/app-root/etc/passwd
+    NSS_WRAPPER_GROUP=/etc/group
+
+    cat /etc/passwd | sed -e 's/^${UNAME}:/${UNAME}-orig:/' > $NSS_WRAPPER_PASSWD
+
+    echo "${UNAME}:x:${USER_ID}:${GROUP_ID}:Default Application User:${HOME}:/sbin/nologin" >> $NSS_WRAPPER_PASSWD
+
+    export NSS_WRAPPER_PASSWD
+    export NSS_WRAPPER_GROUP
+
+    LD_PRELOAD=libnss_wrapper.so
+    export LD_PRELOAD
+fi
