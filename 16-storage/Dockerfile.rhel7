@@ -36,7 +36,9 @@ ENV THERMOSTAT_ROOT=/opt/rh/rh-thermostat16/root
 EXPOSE 8080
 
 RUN yum install -y yum-utils && \
+    yum-config-manager --disable \* &> /dev/null && \
     yum-config-manager --enable rhel-server-rhscl-7-rpms && \
+    yum-config-manager --enable rhel-7-server-rpms && \
     yum-config-manager --enable rhel-7-server-optional-rpms && \
     INSTALL_PKGS="rh-thermostat16" && \
     yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \

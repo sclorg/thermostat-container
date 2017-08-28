@@ -37,6 +37,7 @@ RUN chown -R default:0 /opt/app-root && \
     chmod g+x /home && chmod g+wx /opt/app-root
  
 RUN yum install -y yum-utils && \
+    yum-config-manager --disable \* &> /dev/null && \
     yum-config-manager --enable rhel-server-rhscl-7-rpms && \
     yum-config-manager --enable rhel-7-server-rpms && \
     yum-config-manager --enable rhel-7-server-optional-rpms && \
