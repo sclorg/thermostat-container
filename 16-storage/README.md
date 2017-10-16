@@ -1,7 +1,7 @@
 Thermostat Storage Docker image
 =============================
 
-This repository contains Dockerfiles for a Thermostat Storage running in privileged mode
+This repository contains Dockerfiles for a Thermostat Storage
 that can be accessed by Clients and Agents through HTTP.
 
 Environment variables
