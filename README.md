@@ -7,21 +7,7 @@ Users can choose between RHEL and CentOS based images.
 
 Versions
 ---------------
-Thermostat versions and image variants currently provided are:
-* [Thermostat 1.6 Agent](thermostat-16-agent)
-* [Thermostat 1.6 Storage](thermostat-16-storage)
-
-RHEL versions currently supported are:
-* RHEL7
-
-CentOS versions currently supported are:
-* CentOS7
-
-For more information about contributing, see
-[the Contribution Guidelines](https://github.com/sclorg/welcome/blob/master/contribution.md).
-For more information about concepts used in these docker images, see the
-[Landing page](https://github.com/sclorg/welcome).
-
+**All of the Thermostat images are deprecated**
 
 Installation
 ---------------

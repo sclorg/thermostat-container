@@ -1,6 +1,6 @@
 # Variables are documented in common/build.sh.
 BASE_IMAGE_NAME = thermostat
-VERSIONS = 16-agent 16-storage
+VERSIONS = 
 OPENSHIFT_NAMESPACES = 
 
 # HACK:  Ensure that 'git pull' for old clones doesn't cause confusion.
