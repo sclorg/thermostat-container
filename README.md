@@ -1,7 +1,7 @@
-Thermostat Agent and Storage Docker images
+Thermostat Agent and Storage container images
 ==========================================
 
-This repository contains Dockerfiles for Thermostat Agent and Storage Docker images.
+This repository contains Dockerfiles for Thermostat Agent and Storage container images.
 Users can choose between RHEL and CentOS based images.
 
 
